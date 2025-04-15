@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useDrop, useDrag } from 'react-dnd'
 import { v4 as uuidv4 } from 'uuid'
-import { MoveIcon } from 'lucide-react'
+import { MoveIcon, Trash2Icon } from 'lucide-react'
+import React from 'react'
 
 type Component = {
   id: string
@@ -16,7 +17,8 @@ const TextComponent: React.FC<{
   onUpdate: (id: string, content: string) => void
   onStyleChange: (id: string, styles: Record<string, string>) => void
   onMove: (dragId: string, hoverId: string) => void
-}> = ({ component, onUpdate, onStyleChange, onMove }) => {
+  onDelete: (id: string) => void
+}> = ({ component, onUpdate, onStyleChange, onMove, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [content, setContent] = useState(component.content || '')
   const [styles, setStyles] = useState({
@@ -26,7 +28,7 @@ const TextComponent: React.FC<{
 
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'COMPONENT',
-    item: { id: component.id },
+    item: { id: component.id, type: component.type },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
@@ -34,7 +36,7 @@ const TextComponent: React.FC<{
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'COMPONENT',
-    hover: (item: { id: string }) => {
+    hover: (item: { id: string; type: string }) => {
       if (item.id !== component.id) {
         onMove(item.id, component.id)
       }
@@ -57,33 +59,59 @@ const TextComponent: React.FC<{
       BODY: 'Body text. Click to edit...',
     }[component.type] || ''
 
+  const Tag =
+    {
+      HEADLINE: 'h1',
+      SUBHEADER: 'h3',
+      BODY: 'p',
+    }[component.type] || 'div'
+
+  const tagStyles =
+    {
+      HEADLINE: 'text-2xl font-bold my-2',
+      SUBHEADER: 'text-xl font-semibold my-2',
+      BODY: 'text-base my-2',
+    }[component.type] || ''
+
   return (
     <div
       //@ts-ignore
       ref={drop}
-      className={`relative p-2 my-2 min-h-[40px] rounded-md ${
-        isEditing ? 'border border-blue-300' : 'border border-gray-600'
-      } ${isOver ? 'bg-blue-100' : ''}`}
+      className={`relative group p-2 my-2 min-h-[40px] rounded-md border border-gray-200 ${
+        isOver ? 'bg-blue-100' : ''
+      } ${isEditing ? 'border-blue-300' : ''}`}
       style={{
-        ...styles,
         opacity: isDragging ? 0.5 : 1,
       }}
     >
-      <div
-        //@ts-ignore
-        ref={drag}
-        className='absolute -left-6 top-1/2 transform -translate-y-1/2 cursor-move opacity-0 hover:opacity-100'
-      >
-        <MoveIcon className='h-6 w-6 text-gray-900' />
+      <div className='absolute -right-2 -top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+        <div
+          //@ts-ignore
+          ref={drag}
+          className='cursor-move bg-white rounded-full p-1 shadow-sm hover:bg-gray-100'
+        >
+          <MoveIcon className='h-4 w-4 text-gray-500' />
+        </div>
+        <button
+          onClick={() => onDelete(component.id)}
+          className='cursor-pointer bg-white rounded-full p-1 shadow-sm hover:bg-red-100 hover:text-red-500'
+        >
+          <Trash2Icon className='h-4 w-4 text-gray-500 hover:text-red-500' />
+        </button>
       </div>
-      <div
-        onClick={() => setIsEditing(true)}
-        contentEditable={isEditing}
-        onBlur={handleBlur}
-        suppressContentEditableWarning
-      >
-        {content || defaultContent}
-      </div>
+
+      {React.createElement(
+        Tag,
+        {
+          onClick: () => setIsEditing(true),
+          contentEditable: isEditing,
+          onBlur: handleBlur,
+          suppressContentEditableWarning: true,
+          className: `outline-none ${tagStyles}`,
+          style: styles,
+        },
+        content || defaultContent
+      )}
     </div>
   )
 }
@@ -94,8 +122,8 @@ const LayoutComponent: React.FC<{
   onUpdate: (id: string, content: string) => void
   onStyleChange: (id: string, styles: Record<string, string>) => void
   onMove: (dragId: string, hoverId: string) => void
+  onDelete: (id: string) => void
   //@ts-ignore
-
   renderComponent: (comp: Component) => JSX.Element
 }> = ({
   component,
@@ -103,11 +131,12 @@ const LayoutComponent: React.FC<{
   onUpdate,
   onStyleChange,
   onMove,
+  onDelete,
   renderComponent,
 }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'COMPONENT',
-    item: { id: component.id },
+    item: { id: component.id, type: component.type },
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
@@ -115,9 +144,16 @@ const LayoutComponent: React.FC<{
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'COMPONENT',
-    drop: (item: any) => onDrop(component.id, item),
-    hover: (item: { id: string }) => {
-      if (item.id !== component.id) {
+    drop: (item: any) => {
+      if (!['1COLUMN', '2COLUMN', 'CONTAINER'].includes(item.type)) {
+        onDrop(component.id, item)
+      }
+    },
+    hover: (item: { id: string; type: string }) => {
+      if (
+        item.id !== component.id &&
+        !['1COLUMN', '2COLUMN', 'CONTAINER'].includes(item.type)
+      ) {
         onMove(item.id, component.id)
       }
     },
@@ -129,9 +165,9 @@ const LayoutComponent: React.FC<{
   const getLayoutClasses = () => {
     switch (component.type) {
       case '1COLUMN':
-        return 'flex flex-col w-full bg-[#F5FAFF] p-4 rounded'
+        return 'flex flex-col w-full bg-[#F5FAFF] p-4 rounded gap-2'
       case '2COLUMN':
-        return 'flex flex-row gap-4 w-full bg-[#F5FAFF] p-4 rounded'
+        return 'grid grid-cols-2 w-full bg-[#F5FAFF] p-4 rounded gap-4'
       case 'CONTAINER':
         return 'border border-gray-300 p-4 rounded bg-[#F5FAFF] w-full'
       case 'DIVIDER':
@@ -145,30 +181,47 @@ const LayoutComponent: React.FC<{
     <div
       //@ts-ignore
       ref={drop}
-      className={`relative ${getLayoutClasses()} ${
+      className={`relative group ${getLayoutClasses()} ${
         isOver ? 'bg-blue-100' : ''
       }`}
       style={{
         opacity: isDragging ? 0.5 : 1,
       }}
     >
-      <div
-        //@ts-ignore
-
-        ref={drag}
-        className='absolute -left-6 top-1/2 transform -translate-y-1/2 cursor-move opacity-0 hover:opacity-100'
-      >
-        <MoveIcon className='h-4 w-4 text-gray-500' />
+      <div className='absolute -right-2 -top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+        <div
+          //@ts-ignore
+          ref={drag}
+          className='cursor-move bg-white rounded-full p-1 shadow-sm hover:bg-gray-100'
+        >
+          <MoveIcon className='h-4 w-4 text-gray-500' />
+        </div>
+        <button
+          onClick={() => onDelete(component.id)}
+          className='cursor-pointer bg-white rounded-full p-1 shadow-sm hover:bg-red-100 hover:text-red-500'
+        >
+          <Trash2Icon className='h-4 w-4 text-gray-500 hover:text-red-500' />
+        </button>
       </div>
 
       {component.type === 'DIVIDER' ? (
         <hr className='border-t border-gray-300' />
+      ) : component.type === '2COLUMN' ? (
+        <>
+          <div className='bg-yellow-100 min-h-[100px] flex items-center justify-center text-gray-500'>
+            Empty column
+          </div>
+          <div className='bg-yellow-100 min-h-[100px] flex items-center justify-center text-gray-500'>
+            Empty column
+          </div>
+          {component.children?.map(renderComponent)}
+        </>
       ) : (
         <>
           {component.children?.map(renderComponent)}
           {(!component.children || component.children.length === 0) && (
-            <div className='text-gray-400 p-2 text-center'>
-              {isOver ? 'Drop here' : 'Empty ' + component.type?.toLowerCase()}
+            <div className='text-gray-400 p-2 text-center bg-yellow-100 min-h-[100px] flex items-center justify-center'>
+              {isOver ? 'Drop here' : 'Empty ' + component.type.toLowerCase()}
             </div>
           )}
         </>
@@ -191,7 +244,7 @@ export const ContentPreview: React.FC = () => {
         ? []
         : undefined,
       styles: {
-        color: '#000000', // Default black text color for text components
+        color: '#000000',
       },
     }
 
@@ -220,61 +273,64 @@ export const ContentPreview: React.FC = () => {
     )
   }
 
+  const handleDelete = (id: string) => {
+    const deleteComponent = (comps: Component[]): Component[] => {
+      return comps
+        .filter((comp) => comp.id !== id)
+        .map((comp) => ({
+          ...comp,
+          children: comp.children ? deleteComponent(comp.children) : undefined,
+        }))
+    }
+    setComponents((prev) => deleteComponent(prev))
+  }
+
   const handleMove = (dragId: string, hoverId: string) => {
-    setComponents((prev) => {
-      const findComponent = (
-        comps: Component[],
-        id: string
-      ): Component | null => {
-        for (const comp of comps) {
-          if (comp.id === id) return comp
-          if (comp.children) {
-            const found = findComponent(comp.children, id)
-            if (found) return found
-          }
+    if (dragId === hoverId) return
+
+    const findIndex = (comps: Component[], id: string): number => {
+      return comps.findIndex((comp) => {
+        if (comp.id === id) return true
+        if (comp.children) {
+          return findIndex(comp.children, id) !== -1
         }
-        return null
+        return false
+      })
+    }
+
+    const findParent = (comps: Component[], id: string): Component[] | null => {
+      for (let i = 0; i < comps.length; i++) {
+        if (comps[i].id === id) return comps
+        if (comps[i].children) {
+          const found = findParent(comps[i].children!, id)
+          if (found) return found
+        }
       }
+      return null
+    }
 
-      const dragComponent = findComponent(prev, dragId)
-      const hoverComponent = findComponent(prev, hoverId)
+    const dragParent = findParent([...components], dragId)
+    const hoverParent = findParent([...components], hoverId)
 
-      if (!dragComponent || !hoverComponent) return prev
+    if (!dragParent || !hoverParent) return
 
-      // Remove from old position
-      const removeComponent = (comps: Component[], id: string): Component[] => {
-        return comps.filter((comp) => {
-          if (comp.id === id) return false
-          if (comp.children) {
-            comp.children = removeComponent(comp.children, id)
-          }
-          return true
-        })
-      }
+    const dragIndex = findIndex(dragParent, dragId)
+    const hoverIndex = findIndex(hoverParent, hoverId)
 
-      let newComponents = removeComponent([...prev], dragId)
+    if (dragIndex === -1 || hoverIndex === -1) return
 
-      // Add to new position (after hover component)
-      const insertAfter = (
-        comps: Component[],
-        afterId: string,
-        newComp: Component
-      ): Component[] => {
-        return comps.reduce((acc, comp) => {
-          if (comp.id === afterId) {
-            return [...acc, comp, newComp]
-          }
-          if (comp.children) {
-            comp.children = insertAfter(comp.children, afterId, newComp)
-          }
-          return [...acc, comp]
-        }, [] as Component[])
-      }
+    // Don't replace items with themselves
+    if (dragParent === hoverParent && dragIndex === hoverIndex) {
+      return
+    }
 
-      newComponents = insertAfter(newComponents, hoverId, dragComponent)
+    // Remove from old position
+    const [removed] = dragParent.splice(dragIndex, 1)
 
-      return newComponents
-    })
+    // Insert at new position
+    hoverParent.splice(hoverIndex, 0, removed)
+
+    setComponents([...components])
   }
 
   const renderComponent = (component: Component) => {
@@ -286,6 +342,7 @@ export const ContentPreview: React.FC = () => {
           onUpdate={handleUpdate}
           onStyleChange={handleStyleChange}
           onMove={handleMove}
+          onDelete={handleDelete}
         />
       )
     } else {
@@ -297,6 +354,7 @@ export const ContentPreview: React.FC = () => {
           onUpdate={handleUpdate}
           onStyleChange={handleStyleChange}
           onMove={handleMove}
+          onDelete={handleDelete}
           renderComponent={renderComponent}
         />
       )
