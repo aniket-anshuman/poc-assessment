@@ -65,7 +65,6 @@ class DraftStorage {
 
       request.onsuccess = () => {
         const drafts = request.result || []
-        // Sort drafts by date (newest first)
         drafts.sort((a: Draft, b: Draft) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         )
@@ -104,16 +103,6 @@ class DraftStorage {
 
 const draftStorage = new DraftStorage()
 
-const safeStringify = (data: any): string | null => {
-  try {
-    const cleanedData = JSON.parse(JSON.stringify(data))
-    return JSON.stringify(cleanedData)
-  } catch (error) {
-    console.error('Error stringifying data:', error)
-    return null
-  }
-}
-
 export const ArticleToolbar: React.FC<{ 
   components: Component[],
   onLoadDraft?: (components: Component[]) => void 
@@ -126,8 +115,8 @@ export const ArticleToolbar: React.FC<{
   const [showDraftDialog, setShowDraftDialog] = useState(false)
   const [draftName, setDraftName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
-  // Load drafts on mount
   useEffect(() => {
     const loadDrafts = async () => {
       try {
@@ -211,6 +200,14 @@ export const ArticleToolbar: React.FC<{
     }
   }, [])
 
+  const handlePreview = useCallback(() => {
+    setShowPreview(true)
+  }, [])
+
+  const handleClosePreview = useCallback(() => {
+    setShowPreview(false)
+  }, [])
+
   const handleDownloadHTML = useCallback(() => {
     const zip = new JSZip()
     const mediaFolder = zip.folder('media')
@@ -240,11 +237,9 @@ export const ArticleToolbar: React.FC<{
 
       if (mediaFolder) {
         mediaFolder.file(fileName, array, { binary: true })
-        console.log(`Added media file: ${fileName}`)
       }
     })
 
-    // Generate and trigger download
     zip.generateAsync({ type: 'blob' }).then((content) => {
       saveAs(content, 'article.zip')
     })
@@ -257,6 +252,13 @@ export const ArticleToolbar: React.FC<{
         <button className='grow shrink w-[108px]'>Article Navigator</button>
         <button className='grow shrink w-[105px]' onClick={handleDownloadHTML}>
           Download HTML
+        </button>
+        <button 
+          className='grow shrink w-[105px]' 
+          onClick={handlePreview}
+          title="Preview the article"
+        >
+          Preview
         </button>
         <button 
           className='font-bold text-yellow-400' 
@@ -283,7 +285,28 @@ export const ArticleToolbar: React.FC<{
         )}
       </nav>
 
-      {/* Error Message */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Article Preview</h2>
+              <button
+                onClick={handleClosePreview}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <span className="text-2xl">&times;</span>
+              </button>
+            </div>
+            <div 
+              className="prose max-w-none"
+              dangerouslySetInnerHTML={{ 
+                __html: generateHTMLWithMediaPaths(components) 
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           <span className="block sm:inline">{error}</span>
@@ -297,7 +320,6 @@ export const ArticleToolbar: React.FC<{
         </div>
       )}
 
-      {/* Save Draft Dialog */}
       {showDraftDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
@@ -358,15 +380,22 @@ function generateHTMLWithMediaPaths(components: Component[]): string {
       case 'QUOTE':
         return `<blockquote style="${style}">${content}</blockquote>`
       case 'IMAGE': {
+        if (comp.fileData?.startsWith('data:')) {
+          return `<img src="${comp.fileData}" style="${style}" alt="${content}" />`
+        }
         const fileExt = comp.fileName?.split('.').pop()?.toLowerCase() || 'png'
         const fileName = `media-${comp.id}.${fileExt}`
-        console.log(`Generating image path: ${fileName}`)
         return `<img src="media/${fileName}" style="${style}" alt="${content}" />`
       }
       case 'VIDEO': {
+        if (comp.fileData?.startsWith('data:')) {
+          return `<video controls style="${style}">
+                    <source src="${comp.fileData}" type="video/${comp.fileName?.split('.').pop()?.toLowerCase() || 'mp4'}" />
+                    Your browser does not support the video tag.
+                  </video>`
+        }
         const fileExt = comp.fileName?.split('.').pop()?.toLowerCase() || 'mp4'
         const fileName = `media-${comp.id}.${fileExt}`
-        console.log(`Generating video path: ${fileName}`)
         return `<video controls style="${style}">
                   <source src="media/${fileName}" type="video/${fileExt}" />
                   Your browser does not support the video tag.
