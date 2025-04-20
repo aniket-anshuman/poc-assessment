@@ -197,7 +197,7 @@ export const TextComponent: React.FC<{
 
   const defaultContent =
     {
-      HEADLINE: 'Headline Text',
+      HEADLINE: '',
       SUBHEADER: 'Subheader Text',
       BODY: 'Body text. Click to edit...',
       PARAGRAPH: 'Paragraph text. Click to edit...',
