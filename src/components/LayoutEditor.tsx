@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { EditorHeader } from "./EditorHeader";
 import { ComponentsSidebar } from "./ComponentsSidebar";
 import { ArticleToolbar } from "./ArticleToolbar";
-import { ContentPreview } from "./ContentPreview";
+import { Component, ContentPreview } from "./ContentPreview";
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
 export default function LayoutCreateEmptyTemplate() {
+  const [components, setComponents] = useState<Component[]>([]);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="bg-white">
@@ -18,8 +21,8 @@ export default function LayoutCreateEmptyTemplate() {
               </div>
               <div className="ml-5 w-[81%] max-md:ml-0 max-md:w-full">
                 <div className="w-full max-md:mt-10 max-md:max-w-full">
-                  <ArticleToolbar />
-                  <ContentPreview />
+                  <ArticleToolbar components={components} />
+                  <ContentPreview components={components} setComponents={setComponents} />
                 </div>
               </div>
             </div>
